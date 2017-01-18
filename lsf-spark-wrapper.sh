@@ -8,6 +8,7 @@
 
 # ensure the spark environment is setup
 
+#PYSPARK_PYTHON=/path/to/python
 #SPARK_HOME=/gscmnt/gc2802/halllab/idas/software/local/spark-2.0.2-bin-hadoop2.7
 : "${SPARK_HOME:?Please set SPARK_HOME environment variable!}"
 : "${SPARK_MASTER_PORT:=7077}"

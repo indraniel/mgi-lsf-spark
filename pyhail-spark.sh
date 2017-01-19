@@ -8,15 +8,20 @@ GCC_LIBS=/opt/gcc-4.8.4/lib64
 OPENBLAS_LIBS=/gscmnt/gc2802/halllab/idas/software/local/lib
 CMAKE_BIN=/gscuser/idas/software/cmake/bin
 
+# setup the needed environment variables
 export PATH=${CMAKE_BIN}:${GCC_BIN}:${PATH}
 export LD_LIBRARY_PATH=${GCC_LIBS}:${OPENBLAS_LIBS}:${LD_LIBRARY_PATH}
 
-export PYSPARK_PYTHON=/gscuser/idas/.pyenv/versions/2.7.10/bin/python
+# SPARK software location
 export SPARK_HOME=${ROOT}/software/local/spark-2.0.2-bin-hadoop2.7
-export LSF_SPARK_WRAPPER=${ROOT}/hail-play/lsf-spark-wrapper.sh
+
+# HAIL software locations
 export HAIL_HOME=${ROOT}/software/downloads/github/hail
 export LOCAL_HAIL=${HAIL_HOME}/build/install/hail/bin/hail
 export SPARK_HAIL_JAR=${HAIL_HOME}/build/libs/hail-all-spark.jar
+
+# the PYTHON that should be used
+export PYSPARK_PYTHON=/gscuser/idas/.pyenv/versions/2.7.10/bin/python
 
 # set -o xtrace
 # /bin/bash ${LSF_SPARK_WRAPPER} \

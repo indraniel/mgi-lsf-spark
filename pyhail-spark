@@ -1,5 +1,7 @@
 #!/bin/bash
 
+__VERSION__=0.1.0
+
 # Example cluster mode invocation
 # bsub -q long \
 #    -J idas-pyhail-spark-test-4 \
@@ -237,6 +239,9 @@ function main {
         help|--help)
             local msg=$(help_msg)
             echo "${msg}"
+            ;;
+        version)
+            echo $__VERSION__
             ;;
         local)
             log "Running pyhail repl in local mode."

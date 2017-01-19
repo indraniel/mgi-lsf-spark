@@ -212,11 +212,32 @@ function local_pyspark {
     ${PYSPARK_PYTHON}
 }
 
+function help_msg {
+    local msg=
+    read -r -d '' msg <<-EOF
+	    Usage: pyhail-spark COMMAND [ARGS]...
+	    
+	      A collection of pyhail wrappers for using at the MGI
+	    
+	    Commands:
+	      help         Show this message and exit
+	      version      Show version number and exit
+	      local        Locally run spark and get a python shell with acceses to pyhail
+	      cluster      create a apache spark cluster and run a python script supplied 
+	                   as an argument (must be used via LSF/bsub)
+	EOF
+    echo "${msg}"
+}
+
 function main {
     local exec_type=$1
     shift
     
     case ${exec_type} in 
+        help|--help)
+            local msg=$(help_msg)
+            echo "${msg}"
+            ;;
         local)
             log "Running pyhail repl in local mode."
             local_pyspark
@@ -227,8 +248,7 @@ function main {
             cluster $@
             ;;
         *)
-            msg="The first argument must specify Apache Spark's run mode."
-            msg+="Options are 'cluster' or 'local'"
+            local msg=$(help_msg)
             die "${msg}"
             ;;
     esac

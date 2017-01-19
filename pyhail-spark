@@ -12,6 +12,10 @@
 
 ROOT=/gscmnt/gc2802/halllab/idas
 
+# the JVM
+export JAVA_HOME=/gapp/x64linux/opt/java/jdk/jdk1.8.0_60
+JAVA_BIN=${JAVA_HOME}/bin
+
 # needed because of the c/c++ code embedded in hail
 GCC_BIN=/opt/gcc-4.8.4/bin
 GCC_LIBS=/opt/gcc-4.8.4/lib64
@@ -19,7 +23,7 @@ OPENBLAS_LIBS=/gscmnt/gc2802/halllab/idas/software/local/lib
 CMAKE_BIN=/gscuser/idas/software/cmake/bin
 
 # setup the needed environment variables
-export PATH=${CMAKE_BIN}:${GCC_BIN}:${PATH}
+export PATH=${CMAKE_BIN}:${GCC_BIN}:${JAVA_BIN}:${PATH}
 export LD_LIBRARY_PATH=${GCC_LIBS}:${OPENBLAS_LIBS}:${LD_LIBRARY_PATH}
 
 # SPARK software location

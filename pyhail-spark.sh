@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# Example cluster mode invocation
+# bsub -q long \
+#    -J idas-pyhail-spark-test-4 \
+#    -u idas@wustl.edu -N \
+#    -n 32 \
+#    -R "span[ptile=8]" \
+#    -oo /gscmnt/gc2802/halllab/idas/laboratory/hail-play/idas-test-2/pyhail-test.out.log \
+#    /gscmnt/gc2802/halllab/idas/laboratory/hail-play/pyhail-spark.sh \
+#    cluster pyhail-test.py
+
 ROOT=/gscmnt/gc2802/halllab/idas
 
 # needed because of the c/c++ code embedded in hail

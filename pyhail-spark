@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.1.0
+__VERSION__=0.2.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -47,23 +47,20 @@ export PYSPARK_PYTHON=/gscuser/idas/.pyenv/versions/2.7.10/bin/python
 # set +o xtrace
 
 function log {
-    local msg=$1
-    echo "==== ${msg} ====" >&2
+    echo "==== $@ ====" >&2
 }
 
 function note {
-    local msg=$1
-    echo "---> ${msg}" >&2
+    echo "---> $@" >&2
 }
 
 function subnote {
     local msg=$1
-    echo "--->> ${msg}" >&2
+    echo "--->> $@" >&2
 }
 
 function die {
-    local msg=$1
-    echo "ERROR: ${msg}" >&2
+    echo "ERROR: $@" >&2
     exit 1
 }
 
@@ -160,6 +157,7 @@ function run_pyhail_cmd {
     local pyspark=${spark_python_libs}/pyspark.zip
     local pyhail=${hail_python_libs}/pyhail.zip
 
+    note "(Hail Command) Start Time:" $(date +"%Y-%m-%d %T")
     set -o xtrace
     ${SPARK_HOME}/bin/spark-submit \
         --jars ${SPARK_HAIL_JAR} \
@@ -167,6 +165,7 @@ function run_pyhail_cmd {
         --master spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
         $@
     set +o xtrace
+    note "(Hail Command) Finish Time:" $(date +"%Y-%m-%d %T")
 
 }
 

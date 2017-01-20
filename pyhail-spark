@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.2.0
+__VERSION__=0.3.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -91,6 +91,32 @@ function start_spark_master {
     sleep 5
 }
 
+function ensure_spark_worker_dir {
+    local host=$1
+    subnote "Worker: ${host} -- ensure spark worker dir: ${SPARK_WORKER_DIR}"
+#    set -o xtrace
+    ssh -tq \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -l ${USER} \
+        ${host} \
+        "mkdir -p ${SPARK_WORKER_DIR}"
+#    set +o xtrace
+}
+
+function remove_spark_worker_dir {
+    local host=$1
+    subnote "Worker: ${host} -- removing spark worker dir: ${SPARK_WORKER_DIR}"
+#    set -o xtrace
+    ssh -tq \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -l ${USER} \
+        ${host} \
+        "rm -rf ${SPARK_WORKER_DIR}"
+#    set +o xtrace
+}
+
 function start_spark_workers {
     local -A spark_workers
     local i=
@@ -102,6 +128,7 @@ function start_spark_workers {
         host=$i
         cpus=${nodes[$host]}
         note "Starting Spark Worker ${count} -- host : ${host} | cpus : ${cpus}"
+        ensure_spark_worker_dir ${host}
 #        set -o xtrace
         pid=$(ssh -tq \
                   -o StrictHostKeyChecking=no \
@@ -112,6 +139,7 @@ function start_spark_workers {
                   $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
                   spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
                   -c ${cpus} \
+                  --work-dir ${SPARK_WORKER_DIR} \
                   < /dev/null \
                   > /dev/null & echo \$!")
 #        set +o xtrace
@@ -142,6 +170,7 @@ function stop_spark_workers {
             ${host} \
             "kill ${pid}"
 #        set +o xtrace
+        remove_spark_worker_dir ${host}
     done
 }
 
@@ -175,7 +204,10 @@ function cluster {
     # setup SPARK CLUSTER environment variables
     export SPARK_MASTER=`hostname`
     export SPARK_LOCAL_IP="127.0.0.1"
-    : "${SPARK_MASTER_PORT:=7077}"
+    : "${SPARK_MASTER_PORT:=7077}" # can be overridden in environment
+
+    # set spark worker dir (can be overridden in environment)
+    : "${SPARK_WORKER_DIR:=/tmp/$LSB_JOBID.tmpdir}"
 
     local -A lsf_hosts
     local -A spark_workers

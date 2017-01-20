@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.3.0
+__VERSION__=0.4.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -28,8 +28,10 @@ CMAKE_BIN=/gscuser/idas/software/cmake/bin
 export PATH=${CMAKE_BIN}:${GCC_BIN}:${JAVA_BIN}:${PATH}
 export LD_LIBRARY_PATH=${GCC_LIBS}:${OPENBLAS_LIBS}:${LD_LIBRARY_PATH}
 
-# SPARK software location
+# SPARK software location and setup
 export SPARK_HOME=${ROOT}/software/local/spark-2.0.2-bin-hadoop2.7
+: "${APACHE_SPARK_LOG_DIR:=$HOME/.spark/logs}"  # can be overridden in environment
+export SPARK_LOG_DIR=${APACHE_SPARK_LOG_DIR}
 
 # HAIL software locations
 export HAIL_HOME=${ROOT}/software/downloads/github/hail
@@ -62,6 +64,13 @@ function subnote {
 function die {
     echo "ERROR: $@" >&2
     exit 1
+}
+
+function ensure_spark_log_dir {
+	if [ ! -d "${SPARK_LOG_DIR}" ]; then
+		log "Creating spark log directory directory: ${SPARK_LOG_DIR}"
+		mkdir -p "$outdir"
+	fi
 }
 
 function check_in_lsf_cluster {
@@ -276,11 +285,13 @@ function main {
             ;;
         local)
             log "Running pyhail repl in local mode."
+            ensure_spark_log_dir
             local_pyspark
             ;;
         cluster)
             log "Running Spark in cluster mode."
             log "the pyhail args are:" $@
+            ensure_spark_log_dir
             cluster $@
             ;;
         *)

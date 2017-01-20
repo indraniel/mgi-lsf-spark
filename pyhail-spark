@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.4.0
+__VERSION__=0.4.1
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -69,7 +69,7 @@ function die {
 function ensure_spark_log_dir {
 	if [ ! -d "${SPARK_LOG_DIR}" ]; then
 		log "Creating spark log directory directory: ${SPARK_LOG_DIR}"
-		mkdir -p "$outdir"
+		mkdir -p "${SPARK_LOG_DIR}"
 	fi
 }
 

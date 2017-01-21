@@ -138,20 +138,21 @@ function start_spark_workers {
         cpus=${nodes[$host]}
         note "Starting Spark Worker ${count} -- host : ${host} | cpus : ${cpus}"
         ensure_spark_worker_dir ${host}
-#        set -o xtrace
-        pid=$(ssh -tq \
-                  -o StrictHostKeyChecking=no \
-                  -o UserKnownHostsFile=/dev/null \
-                  -l ${USER} \
-                  ${host} \
-                  "nohup \
-                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
-                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
-                  -c ${cpus} \
-                  --work-dir ${SPARK_WORKER_DIR} \
-                  < /dev/null \
-                  > /dev/null & echo \$!")
-#        set +o xtrace
+        set -o xtrace
+        blaunch -no-wait -z ${host} ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$SPARK_MASTER:$SPARK_MASTER_PORT -c ${cpus}
+#        pid=$(ssh -tq \
+#                  -o StrictHostKeyChecking=no \
+#                  -o UserKnownHostsFile=/dev/null \
+#                  -l ${USER} \
+#                  ${host} \
+#                  "nohup \
+#                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
+#                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
+#                  -c ${cpus} \
+#                  --work-dir ${SPARK_WORKER_DIR} \
+#                  < /dev/null \
+#                  > /dev/null & echo \$!")
+        set +o xtrace
         subnote "Spark Worker ${count} -- host : ${host} | cpus : ${cpus} | pid : ${pid}"
         spark_workers[${host}]=${pid}
     done
@@ -212,7 +213,7 @@ function cluster {
 
     # setup SPARK CLUSTER environment variables
     export SPARK_MASTER=`hostname`
-    export SPARK_LOCAL_IP="127.0.0.1"
+    export SPARK_PUBLIC_DNS=$(/sbin/ifconfig | grep -A 1 eth0 | awk '/inet addr/{print substr($2,6)}')
     : "${SPARK_MASTER_PORT:=7077}" # can be overridden in environment
 
     # set spark worker dir (can be overridden in environment)
@@ -223,6 +224,7 @@ function cluster {
 
     log "SPARK_HOME: ${SPARK_HOME}"
     log "SPARK_MASTER: ${SPARK_MASTER}"
+    log "SPARK_PUBLIC_DNS: ${SPARK_PUBLIC_DNS}"
 
     log "Gathering HOST and CPU info"
     cpu_hosts_string=$(parse_lsf_cpu_hosts)
@@ -230,6 +232,9 @@ function cluster {
 
     log "Starting spark master node: spark://${SPARK_MASTER}:${SPARK_MASTER_PORT}"
     start_spark_master
+    note "(sleep) Start Time:" $(date +"%Y-%m-%d %T")
+    sleep 120
+    note "(sleep) Finish Time:" $(date +"%Y-%m-%d %T")
 
     log "Starting spark worker nodes"
     spark_workers_string=$(start_spark_workers "$(declare -p lsf_hosts)")

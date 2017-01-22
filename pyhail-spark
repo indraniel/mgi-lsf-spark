@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.7.0
+__VERSION__=0.7.1
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -393,7 +393,7 @@ function help_msg {
 	
 	      SPARK_WORKER_DIR                           The workspace directory to use for the spark worker/executor
 	                                                 nodes to use during cluster operations
-	                                                 (default: /tmp/$LSB_JOBID.tmpdir)
+	                                                 (default: /tmp/\$LSB_JOBID.tmpdir)
 	EOF
     echo "${msg}"
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.5.0
+__VERSION__=0.6.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -117,6 +117,30 @@ function exec_ssh_cmd {
     fi
 }
 
+function exec_ssh_cmd_with_rv {
+    local host=$1
+    local cmd=$2
+    local debug=$3
+    local out=
+
+    if [ -n "$debug" ]; then
+        set -o xtrace
+    fi
+
+    out=$(ssh -tq \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -l ${USER} \
+        ${host} \
+        "${cmd}")
+
+    if [ -n "$debug" ]; then
+        set +o xtrace
+    fi
+
+    echo ${out}
+}
+
 function ensure_dir {
     local directory=$1
     local msg=$2
@@ -198,12 +222,8 @@ function remove_spark_worker_dir {
     local host=$1
     subnote "Worker: ${host} -- removing spark worker dir: ${SPARK_WORKER_DIR}"
 #    set -o xtrace
-    ssh -tq \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -l ${USER} \
-        ${host} \
-        "rm -rf ${SPARK_WORKER_DIR}"
+    local cmd="rm -rf ${SPARK_WORKER_DIR}"
+    exec_ssh_cmd ${host} "${cmd}" debug
 #    set +o xtrace
 }
 
@@ -224,22 +244,33 @@ function start_spark_workers {
         note "Starting Spark Worker ${count} -- host : ${host} | cpus : ${cpus}"
         ensure_spark_worker_dir ${host}
         create_spark_worker_properties_file ${host} ${properties_file} ${SPARK_WORKER_DIR}
-        set -o xtrace
+
+        local cmd="nohup ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker "
+        cmd+="spark://${SPARK_MASTER}:${SPARK_MASTER_PORT} "
+        cmd+="-c ${cpus} "
+        cmd+="--work-dir ${SPARK_WORKER_DIR} "
+        cmd+="--properties-file ${properties_file} "
+        cmd+="< /dev/null "
+        cmd+="> ${worker_log_dir}/spark-worker-${host}.log "
+        cmd+="2>&1 & echo \$!"
+
+        local pid=$(exec_ssh_cmd_with_rv ${host} "${cmd}" debug)
+#        set -o xtrace
         #blaunch -no-wait -z ${host} ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$SPARK_MASTER:$SPARK_MASTER_PORT -c ${cpus}
-        pid=$(ssh -tq \
-                  -o StrictHostKeyChecking=no \
-                  -o UserKnownHostsFile=/dev/null \
-                  -l ${USER} \
-                  ${host} \
-                  "nohup \
-                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
-                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
-                  -c ${cpus} \
-                  --work-dir ${SPARK_WORKER_DIR} \
-                  --properties-file ${properties_file} \
-                  < /dev/null \
-                  > ${worker_log_dir}/spark-worker-$host.log 2>&1 & echo \$!")
-        set +o xtrace
+#        pid=$(ssh -tq \
+#                  -o StrictHostKeyChecking=no \
+#                  -o UserKnownHostsFile=/dev/null \
+#                  -l ${USER} \
+#                  ${host} \
+#                  "nohup \
+#                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
+#                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
+#                  -c ${cpus} \
+#                  --work-dir ${SPARK_WORKER_DIR} \
+#                  --properties-file ${properties_file} \
+#                  < /dev/null \
+#                  > ${worker_log_dir}/spark-worker-$host.log 2>&1 & echo \$!")
+#        set +o xtrace
 
         local worker_msg="Spark Worker ${count} -- host : "
         worker_msg+="${host} | cpus : "
@@ -266,16 +297,18 @@ function stop_spark_workers {
     eval "local -A spark_workers=${1#*=}"
 
     for i in "${!spark_workers[@]}"; do
-        host=$i
-        pid=${spark_workers[$host]}
+        local host=$i
+        local pid=${spark_workers[$host]}
         note "Stopping Spark Worker -- host : ${host} | pid : ${pid}"
+        local cmd="kill ${pid}"
+        exec_ssh_cmd ${host} "${cmd}" debug
 #        set -o xtrace
-        ssh -tq \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -l ${USER} \
-            ${host} \
-            "kill ${pid}"
+#        ssh -tq \
+#            -o StrictHostKeyChecking=no \
+#            -o UserKnownHostsFile=/dev/null \
+#            -l ${USER} \
+#            ${host} \
+#            "kill ${pid}"
 #        set +o xtrace
         remove_spark_worker_dir ${host}
     done

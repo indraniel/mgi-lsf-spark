@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.6.0
+__VERSION__=0.6.1
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -194,14 +194,6 @@ function ensure_spark_worker_dir {
     local cmd="mkdir -p ${SPARK_WORKER_DIR}"
     subnote "Worker: ${host} -- ensure spark worker dir: ${SPARK_WORKER_DIR}"
     exec_ssh_cmd ${host} "${cmd}" debug
-#    set -o xtrace
-#    ssh -tq \
-#        -o StrictHostKeyChecking=no \
-#        -o UserKnownHostsFile=/dev/null \
-#        -l ${USER} \
-#        ${host} \
-#        "mkdir -p ${SPARK_WORKER_DIR}"
-#    set +o xtrace
 }
 
 function create_spark_worker_properties_file {
@@ -221,10 +213,8 @@ function create_spark_worker_properties_file {
 function remove_spark_worker_dir {
     local host=$1
     subnote "Worker: ${host} -- removing spark worker dir: ${SPARK_WORKER_DIR}"
-#    set -o xtrace
     local cmd="rm -rf ${SPARK_WORKER_DIR}"
     exec_ssh_cmd ${host} "${cmd}" debug
-#    set +o xtrace
 }
 
 function start_spark_workers {
@@ -255,22 +245,6 @@ function start_spark_workers {
         cmd+="2>&1 & echo \$!"
 
         local pid=$(exec_ssh_cmd_with_rv ${host} "${cmd}" debug)
-#        set -o xtrace
-        #blaunch -no-wait -z ${host} ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$SPARK_MASTER:$SPARK_MASTER_PORT -c ${cpus}
-#        pid=$(ssh -tq \
-#                  -o StrictHostKeyChecking=no \
-#                  -o UserKnownHostsFile=/dev/null \
-#                  -l ${USER} \
-#                  ${host} \
-#                  "nohup \
-#                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
-#                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
-#                  -c ${cpus} \
-#                  --work-dir ${SPARK_WORKER_DIR} \
-#                  --properties-file ${properties_file} \
-#                  < /dev/null \
-#                  > ${worker_log_dir}/spark-worker-$host.log 2>&1 & echo \$!")
-#        set +o xtrace
 
         local worker_msg="Spark Worker ${count} -- host : "
         worker_msg+="${host} | cpus : "
@@ -302,14 +276,6 @@ function stop_spark_workers {
         note "Stopping Spark Worker -- host : ${host} | pid : ${pid}"
         local cmd="kill ${pid}"
         exec_ssh_cmd ${host} "${cmd}" debug
-#        set -o xtrace
-#        ssh -tq \
-#            -o StrictHostKeyChecking=no \
-#            -o UserKnownHostsFile=/dev/null \
-#            -l ${USER} \
-#            ${host} \
-#            "kill ${pid}"
-#        set +o xtrace
         remove_spark_worker_dir ${host}
     done
 }

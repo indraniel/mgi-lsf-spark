@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.6.1
+__VERSION__=0.6.2
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -112,9 +112,7 @@ function exec_ssh_cmd {
         ${host} \
         "${cmd}"
 
-    if [ -n "$debug" ]; then
-        set +o xtrace
-    fi
+    set +o xtrace
 }
 
 function exec_ssh_cmd_with_rv {
@@ -134,9 +132,7 @@ function exec_ssh_cmd_with_rv {
         ${host} \
         "${cmd}")
 
-    if [ -n "$debug" ]; then
-        set +o xtrace
-    fi
+    set +o xtrace
 
     echo ${out}
 }

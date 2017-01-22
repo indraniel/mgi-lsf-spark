@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.6.2
+__VERSION__=0.6.3
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -189,7 +189,7 @@ function ensure_spark_worker_dir {
     local host=$1
     local cmd="mkdir -p ${SPARK_WORKER_DIR}"
     subnote "Worker: ${host} -- ensure spark worker dir: ${SPARK_WORKER_DIR}"
-    exec_ssh_cmd ${host} "${cmd}" debug
+    exec_ssh_cmd ${host} "${cmd}"
 }
 
 function create_spark_worker_properties_file {
@@ -202,7 +202,7 @@ function create_spark_worker_properties_file {
 		spark.network.timeout  300
 		EOF
     local cmd="echo '${properties_conf}' > ${properties_file}"
-    exec_ssh_cmd ${host} "${cmd}" debug
+    exec_ssh_cmd ${host} "${cmd}"
     check_remote_file_exists ${host} ${properties_file}
 }
 
@@ -210,7 +210,7 @@ function remove_spark_worker_dir {
     local host=$1
     subnote "Worker: ${host} -- removing spark worker dir: ${SPARK_WORKER_DIR}"
     local cmd="rm -rf ${SPARK_WORKER_DIR}"
-    exec_ssh_cmd ${host} "${cmd}" debug
+    exec_ssh_cmd ${host} "${cmd}"
 }
 
 function start_spark_workers {
@@ -240,7 +240,7 @@ function start_spark_workers {
         cmd+="> ${worker_log_dir}/spark-worker-${host}.log "
         cmd+="2>&1 & echo \$!"
 
-        local pid=$(exec_ssh_cmd_with_rv ${host} "${cmd}" debug)
+        local pid=$(exec_ssh_cmd_with_rv ${host} "${cmd}")
 
         local worker_msg="Spark Worker ${count} -- host : "
         worker_msg+="${host} | cpus : "
@@ -271,7 +271,7 @@ function stop_spark_workers {
         local pid=${spark_workers[$host]}
         note "Stopping Spark Worker -- host : ${host} | pid : ${pid}"
         local cmd="kill ${pid}"
-        exec_ssh_cmd ${host} "${cmd}" debug
+        exec_ssh_cmd ${host} "${cmd}"
         remove_spark_worker_dir ${host}
     done
 }

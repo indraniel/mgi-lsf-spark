@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.6.3
+__VERSION__=0.7.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -101,6 +101,8 @@ function exec_ssh_cmd {
     local cmd=$2
     local debug=$3
 
+    note "SSH: ${host} | CMD: ${cmd}"
+
     if [ -n "$debug" ]; then
         set -o xtrace
     fi
@@ -120,6 +122,8 @@ function exec_ssh_cmd_with_rv {
     local cmd=$2
     local debug=$3
     local out=
+
+    note "SSH: ${host} | CMD: ${cmd}"
 
     if [ -n "$debug" ]; then
         set -o xtrace
@@ -229,6 +233,7 @@ function start_spark_workers {
         local cpus=${nodes[$host]}
         note "Starting Spark Worker ${count} -- host : ${host} | cpus : ${cpus}"
         ensure_spark_worker_dir ${host}
+        note "Creating Spark Worker property/conf file: ${properties_file}"
         create_spark_worker_properties_file ${host} ${properties_file} ${SPARK_WORKER_DIR}
 
         local cmd="nohup ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker "

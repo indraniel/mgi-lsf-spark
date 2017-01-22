@@ -12,6 +12,10 @@ __VERSION__=0.5.0
 #    /gscmnt/gc2802/halllab/idas/laboratory/hail-play/pyhail-spark \
 #    cluster pyhail-test.py
 
+# http://stackoverflow.com/questions/9893667/is-there-a-way-to-write-a-bash-function-which-aborts-the-whole-execution-no-mat
+trap "exit 1" TERM
+export TOP_PID=$$
+
 ROOT=/gscmnt/gc2802/halllab/idas
 
 # the JVM
@@ -30,8 +34,20 @@ export LD_LIBRARY_PATH=${GCC_LIBS}:${OPENBLAS_LIBS}:${LD_LIBRARY_PATH}
 
 # SPARK software location and setup
 export SPARK_HOME=${ROOT}/software/local/spark-2.0.2-bin-hadoop2.7
+
+: "${APACHE_SPARK_MASTER_PORT:=7077}"           # can be overridden in environment
+export SPARK_MASTER_PORT=${APACHE_SPARK_MASTER_PORT}
+
+: "${APACHE_SPARK_MASTER_WEBUI_PORT:=8080}"     # can be overridden in environment
+export SPARK_MASTER_WEBUI_PORT=${APACHE_SPARK_MASTER_WEBUI_PORT}
+
 : "${APACHE_SPARK_LOG_DIR:=$HOME/.spark/logs}"  # can be overridden in environment
 export SPARK_LOG_DIR=${APACHE_SPARK_LOG_DIR}
+
+# Seconds to wait for all the spart workers/executors to fully start up
+# and connect to the master node.  Sometimes NFS can be very, very sluggish
+: "${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME:=30}"  # can be overridden in environment
+: "${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME:=120}" # can be overridden in environment
 
 # HAIL software locations
 export HAIL_HOME=${ROOT}/software/downloads/github/hail
@@ -70,11 +86,53 @@ function die {
     kill -s TERM ${TOP_PID}
 }
 
-function ensure_spark_log_dir {
-	if [ ! -d "${SPARK_LOG_DIR}" ]; then
-		log "Creating spark log directory directory: ${SPARK_LOG_DIR}"
-		mkdir -p "${SPARK_LOG_DIR}"
+function check_remote_file_exists {
+    local host=$1
+    local file_path=$2
+    local cmd=
+    local check=$(ssh -tq -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -l ${USER} ${host} [[ -f ${file_path} ]] && echo "yes" || echo "no";)
+    if [ "$check" == "no" ]; then
+        die "Did not find ${file_path} on '${host}' !"
+    fi
+}
+
+function exec_ssh_cmd {
+    local host=$1
+    local cmd=$2
+    local debug=$3
+
+    if [ -n "$debug" ]; then
+        set -o xtrace
+    fi
+
+    ssh -tq \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -l ${USER} \
+        ${host} \
+        "${cmd}"
+
+    if [ -n "$debug" ]; then
+        set +o xtrace
+    fi
+}
+
+function ensure_dir {
+    local directory=$1
+    local msg=$2
+	if [ ! -d "${directory}" ]; then
+		note "${msg}: ${directory}"
+		mkdir -p "${directory}"
 	fi
+}
+
+function ensure_spark_log_dir {
+    ensure_dir ${SPARK_LOG_DIR} "Creating spark log directory"
+}
+
+function ensure_spark_worker_log_dir {
+    local directory=$1
+    ensure_dir ${directory} "Creating spark cluster worker log directory"
 }
 
 function check_in_lsf_cluster {
@@ -101,20 +159,39 @@ function parse_lsf_cpu_hosts {
 function start_spark_master {
     ${SPARK_HOME}/sbin/start-master.sh > /dev/null
     log "Successfully launched spark master node"
-    sleep 5
+    note "Sleeping for ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME} seconds to allow spark master to setup"
+    note "(Setup Spark Master) Start"
+    sleep ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME}
+    note "(Setup Spark Master) Finish"
 }
 
 function ensure_spark_worker_dir {
     local host=$1
+    local cmd="mkdir -p ${SPARK_WORKER_DIR}"
     subnote "Worker: ${host} -- ensure spark worker dir: ${SPARK_WORKER_DIR}"
+    exec_ssh_cmd ${host} "${cmd}" debug
 #    set -o xtrace
-    ssh -tq \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -l ${USER} \
-        ${host} \
-        "mkdir -p ${SPARK_WORKER_DIR}"
+#    ssh -tq \
+#        -o StrictHostKeyChecking=no \
+#        -o UserKnownHostsFile=/dev/null \
+#        -l ${USER} \
+#        ${host} \
+#        "mkdir -p ${SPARK_WORKER_DIR}"
 #    set +o xtrace
+}
+
+function create_spark_worker_properties_file {
+    local host=$1
+    local properties_file=$2
+    local work_dir=$3
+
+    read -r -d '' properties_conf <<-EOF
+		spark.local.dir        ${work_dir}
+		spark.network.timeout  300
+		EOF
+    local cmd="echo '${properties_conf}' > ${properties_file}"
+    exec_ssh_cmd ${host} "${cmd}" debug
+    check_remote_file_exists ${host} ${properties_file}
 }
 
 function remove_spark_worker_dir {
@@ -135,35 +212,51 @@ function start_spark_workers {
     local i=
     local -i count=0
     eval "local -A nodes=${1#*=}"
+    local worker_log_dir=${SPARK_LOG_DIR}/worker-logs
+    local properties_file=${SPARK_WORKER_DIR}/spark-worker-defaults.conf
+
+    ensure_spark_worker_log_dir ${worker_log_dir}
 
     for i in "${!nodes[@]}"; do
         count=$(( $count + 1 ))
-        host=$i
-        cpus=${nodes[$host]}
+        local host=$i
+        local cpus=${nodes[$host]}
         note "Starting Spark Worker ${count} -- host : ${host} | cpus : ${cpus}"
         ensure_spark_worker_dir ${host}
+        create_spark_worker_properties_file ${host} ${properties_file} ${SPARK_WORKER_DIR}
         set -o xtrace
-        blaunch -no-wait -z ${host} ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$SPARK_MASTER:$SPARK_MASTER_PORT -c ${cpus}
-#        pid=$(ssh -tq \
-#                  -o StrictHostKeyChecking=no \
-#                  -o UserKnownHostsFile=/dev/null \
-#                  -l ${USER} \
-#                  ${host} \
-#                  "nohup \
-#                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
-#                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
-#                  -c ${cpus} \
-#                  --work-dir ${SPARK_WORKER_DIR} \
-#                  < /dev/null \
-#                  > /dev/null & echo \$!")
+        #blaunch -no-wait -z ${host} ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$SPARK_MASTER:$SPARK_MASTER_PORT -c ${cpus}
+        pid=$(ssh -tq \
+                  -o StrictHostKeyChecking=no \
+                  -o UserKnownHostsFile=/dev/null \
+                  -l ${USER} \
+                  ${host} \
+                  "nohup \
+                  $SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker \
+                  spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
+                  -c ${cpus} \
+                  --work-dir ${SPARK_WORKER_DIR} \
+                  --properties-file ${properties_file} \
+                  < /dev/null \
+                  > ${worker_log_dir}/spark-worker-$host.log 2>&1 & echo \$!")
         set +o xtrace
-        subnote "Spark Worker ${count} -- host : ${host} | cpus : ${cpus} | pid : ${pid}"
+
+        local worker_msg="Spark Worker ${count} -- host : "
+        worker_msg+="${host} | cpus : "
+        worker_msg+="${cpus} | pid : ${pid}"
+        subnote ${worker_msg}
+
         spark_workers[${host}]=${pid}
     done
 
     # Wait a few moments for all the workers to fully start up
     # and connect to the master node
-    sleep 3
+    local msg="Sleeping for ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME} seconds "
+    msg+="to allow spark worker/executor connections to setup"
+    note ${msg}
+    note "(Setup Spark Worker Connections) Start"
+    sleep ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME}
+    note "(Setup Spark Worker Connections) Finish"
 
     declare -p spark_workers | sed -e 's/^declare -A spark_workers=//'
 }
@@ -214,10 +307,12 @@ function run_pyhail_cmd {
 function cluster {
     check_in_lsf_cluster
 
+    export SPARK_LOG_DIR=${SPARK_LOG_DIR}/cluster/${LSB_JOBID}
+    ensure_spark_log_dir
+
     # setup SPARK CLUSTER environment variables
-    export SPARK_MASTER=`hostname`
+    export SPARK_MASTER=$(hostname)
     export SPARK_PUBLIC_DNS=$(/sbin/ifconfig | grep -A 1 eth0 | awk '/inet addr/{print substr($2,6)}')
-    : "${SPARK_MASTER_PORT:=7077}" # can be overridden in environment
 
     # set spark worker dir (can be overridden in environment)
     : "${SPARK_WORKER_DIR:=/tmp/$LSB_JOBID.tmpdir}"
@@ -228,6 +323,8 @@ function cluster {
     log "SPARK_HOME: ${SPARK_HOME}"
     log "SPARK_MASTER: ${SPARK_MASTER}"
     log "SPARK_PUBLIC_DNS: ${SPARK_PUBLIC_DNS}"
+    log "SPARK_MASTER_WEBUI: http://${SPARK_PUBLIC_DNS}:${SPARK_MASTER_WEBUI_PORT}"
+    log "LSB_MCPU_HOSTS : ${LSB_MCPU_HOSTS}"
 
     log "Gathering HOST and CPU info"
     cpu_hosts_string=$(parse_lsf_cpu_hosts)
@@ -235,9 +332,6 @@ function cluster {
 
     log "Starting spark master node: spark://${SPARK_MASTER}:${SPARK_MASTER_PORT}"
     start_spark_master
-    note "(sleep) Start Time:" $(date +"%Y-%m-%d %T")
-    sleep 120
-    note "(sleep) Finish Time:" $(date +"%Y-%m-%d %T")
 
     log "Starting spark worker nodes"
     spark_workers_string=$(start_spark_workers "$(declare -p lsf_hosts)")
@@ -254,6 +348,8 @@ function cluster {
 }
 
 function local_pyspark {
+    export SPARK_LOG_DIR="${SPARK_LOG_DIR}/local/${LSB_JOBID}"
+    ensure_spark_log_dir
     local py4j=${SPARK_HOME}/python/lib/py4j-0.10.3-src.zip
     local spark_python_libs=${SPARK_HOME}/python
     local hail_python_libs=${HAIL_HOME}/python
@@ -275,6 +371,29 @@ function help_msg {
 	      local        Locally run spark and get a python shell with acceses to pyhail
 	      cluster      create a apache spark cluster and run a python script supplied 
 	                   as an argument (must be used via LSF/bsub)
+	     
+	    Environment Variables:
+	     
+	    Use these environment variables to adjust how pyhail-spark operates:
+	     
+	      APACHE_SPARK_LOG_DIR                       Directory where Spark places its logs
+	                                                 (default: \$HOME/.spark/logs)
+	
+	      APACHE_SPARK_MASTER_PORT                   The port Spark uses for the master node during cluster
+	                                                 operations (default: 7077)
+	
+	      APACHE_SPARK_MASTER_WEBUI_PORT             The WebUI port Spark uses for the master node during
+	                                                 cluster operations (default: 8080)
+	
+	      SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME    The number of seconds to wait for the spark master node
+	                                                 to fully startup during cluster operations (default: 30)
+	
+	      SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME    The number of seconds to wait for the master node
+	                                                 to fully startup during cluster operations (default: 120)
+	
+	      SPARK_WORKER_DIR                           The workspace directory to use for the spark worker/executor
+	                                                 nodes to use during cluster operations
+	                                                 (default: /tmp/$LSB_JOBID.tmpdir)
 	EOF
     echo "${msg}"
 }
@@ -293,13 +412,11 @@ function main {
             ;;
         local)
             log "Running pyhail repl in local mode."
-            ensure_spark_log_dir
             local_pyspark
             ;;
         cluster)
-            log "Running Spark in cluster mode."
+            log "Running pyhail in a standalone spark cluster."
             log "the pyhail args are:" $@
-            ensure_spark_log_dir
             cluster $@
             ;;
         *)

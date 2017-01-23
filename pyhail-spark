@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.8.1
+__VERSION__=0.9.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -290,15 +290,44 @@ function start_spark_workers {
 function wait_till_spark_workers_start {
     local -A spark_workers
     eval "local -A spark_workers=${1#*=}"
+    local log_dir=$2
+    local search_msg="Successfully registered with master"
 
-    # Wait a few moments for all the workers to fully start up
-    # and connect to the master node
-    local msg="Sleeping for ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME} seconds "
-    msg+="to allow spark worker/executor connections to setup"
-    note ${msg}
-    note "(Setup Spark Worker Connections) Start"
-    sleep ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME}
-    note "(Setup Spark Worker Connections) Finish"
+    local -i total_worker_hosts=${#spark_workers[@]}
+    local -i log_file_existence_count=0
+    local -i wrkr_success_setup_count=0
+    local -i wait_secs=0
+    local -i increment_secs=10
+
+    note "Timeout in ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME} seconds"
+    until ( [ ${log_file_existence_count} -eq ${total_worker_hosts} ] && \
+            [ ${wrkr_success_setup_count} -eq ${total_worker_hosts} ] ) || \
+          [ ${wait_secs} -ge ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME} ]; do
+        log_file_existence_count=0
+        wrkr_success_setup_count=0
+        for i in "${!spark_workers[@]}"; do
+            local host=$i
+            local host_logfile=${log_dir}/worker-logs/spark-worker-${host}.log
+            if [ -e ${host_logfile} ]; then
+                log_file_existence_count=$(( ${log_file_existence_count} + 1 ))
+                if grep -q "${search_msg}" ${host_logfile}; then
+                    wrkr_success_setup_count=$(( ${wrkr_success_setup_count} + 1 ))
+                fi
+            fi
+        done
+        sleep ${increment_secs}
+        subnote "worker log file count: ${log_file_existence_count} | worker setup success count: ${wrkr_success_setup_count}"
+        wait_secs=$(( ${wait_secs} + ${increment_secs} ))
+    done
+
+    note "Waited ${wait_secs} seconds"
+
+    if [ ${cmd_status} -ne 0 ]; then
+        local err_msg="All the Spark Workers failed to correctly startup in time. "
+        err_msg+="See worker log directory: ${log_dir}/worker-logs"
+        pkill -TERM -u ${USER} java
+        die "${err_msg}"
+    fi
 }
 
 function stop_spark_workers {
@@ -375,7 +404,7 @@ function cluster {
     eval "local -A spark_workers="${spark_workers_string}
 
     log "Wait for spark worker/executor nodes to startup and initialize"
-    wait_till_spark_workers_start "$(declare -p spark_workers)"
+    wait_till_spark_workers_start "$(declare -p spark_workers)" ${SPARK_LOG_DIR}
 
     log "Exec pyhail command"
     run_pyhail_cmd $@

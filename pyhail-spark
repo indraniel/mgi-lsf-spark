@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.7.1
+__VERSION__=0.7.2
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -183,6 +183,11 @@ function parse_lsf_cpu_hosts {
 function start_spark_master {
     ${SPARK_HOME}/sbin/start-master.sh > /dev/null
     log "Successfully launched spark master node"
+}
+
+function wait_till_spark_master_starts {
+    local master_host=$1
+    local log_dir=$2
     note "Sleeping for ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME} seconds to allow spark master to setup"
     note "(Setup Spark Master) Start"
     sleep ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME}
@@ -255,6 +260,13 @@ function start_spark_workers {
         spark_workers[${host}]=${pid}
     done
 
+    declare -p spark_workers | sed -e 's/^declare -A spark_workers=//'
+}
+
+function wait_till_spark_workers_start {
+    local -A spark_workers
+    eval "local -A spark_workers=${1#*=}"
+
     # Wait a few moments for all the workers to fully start up
     # and connect to the master node
     local msg="Sleeping for ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME} seconds "
@@ -263,8 +275,6 @@ function start_spark_workers {
     note "(Setup Spark Worker Connections) Start"
     sleep ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME}
     note "(Setup Spark Worker Connections) Finish"
-
-    declare -p spark_workers | sed -e 's/^declare -A spark_workers=//'
 }
 
 function stop_spark_workers {
@@ -333,9 +343,15 @@ function cluster {
     log "Starting spark master node: spark://${SPARK_MASTER}:${SPARK_MASTER_PORT}"
     start_spark_master
 
+    log "Wait for spark master node to startup"
+    wait_till_spark_master_starts ${SPARK_MASTER} ${SPARK_LOG_DIR}
+
     log "Starting spark worker nodes"
     spark_workers_string=$(start_spark_workers "$(declare -p lsf_hosts)")
     eval "local -A spark_workers="${spark_workers_string}
+
+    log "Wait for spark worker/executor nodes to startup and connect to master node"
+    wait_till_spark_workers_start "$(declare -p spark_workers)"
 
     log "Exec pyhail command"
     run_pyhail_cmd $@

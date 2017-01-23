@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.7.2
+__VERSION__=0.8.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -46,7 +46,7 @@ export SPARK_LOG_DIR=${APACHE_SPARK_LOG_DIR}
 
 # Seconds to wait for all the spart workers/executors to fully start up
 # and connect to the master node.  Sometimes NFS can be very, very sluggish
-: "${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME:=30}"  # can be overridden in environment
+: "${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME:=60}"  # can be overridden in environment
 : "${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME:=120}" # can be overridden in environment
 
 # HAIL software locations
@@ -188,10 +188,33 @@ function start_spark_master {
 function wait_till_spark_master_starts {
     local master_host=$1
     local log_dir=$2
-    note "Sleeping for ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME} seconds to allow spark master to setup"
-    note "(Setup Spark Master) Start"
-    sleep ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME}
-    note "(Setup Spark Master) Finish"
+    local search_msg="I have been elected leader"
+
+    local master_logfile=${log_dir}/
+    master_logfile+=spark-${USER}-org.apache.spark.deploy.master.Master-1-${master_host}.out
+
+    local -i cmd_status=1
+    local -i wait_secs=0
+    local -i increment_secs=10
+
+    note "Timeout in ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME} seconds"
+    until ( [ -e ${master_logfile} ] && [ ${cmd_status} -eq 0 ] ) || \
+          [ ${wait_secs} -ge ${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME} ]; do
+        if [ -e ${master_logfile} ]; then
+            grep -q "${search_msg}" ${master_logfile}
+            cmd_status=$?
+        fi
+        sleep ${increment_secs}
+        wait_secs=$(( ${wait_secs} + ${increment_secs} ))
+    done
+
+    note "Waited ${wait_secs} seconds"
+
+    if [ ${cmd_status} -ne 0 ]; then
+        local err_msg="Spark Master failed to correctly startup in time. "
+        err_msg+="See ${master_logfile}"
+        die "${err_msg}"
+    fi
 }
 
 function ensure_spark_worker_dir {
@@ -343,14 +366,14 @@ function cluster {
     log "Starting spark master node: spark://${SPARK_MASTER}:${SPARK_MASTER_PORT}"
     start_spark_master
 
-    log "Wait for spark master node to startup"
+    log "Wait for spark master node to start up and initialize"
     wait_till_spark_master_starts ${SPARK_MASTER} ${SPARK_LOG_DIR}
 
     log "Starting spark worker nodes"
     spark_workers_string=$(start_spark_workers "$(declare -p lsf_hosts)")
     eval "local -A spark_workers="${spark_workers_string}
 
-    log "Wait for spark worker/executor nodes to startup and connect to master node"
+    log "Wait for spark worker/executor nodes to startup and initialize"
     wait_till_spark_workers_start "$(declare -p spark_workers)"
 
     log "Exec pyhail command"
@@ -402,7 +425,7 @@ function help_msg {
 	                                                 cluster operations (default: 8080)
 	
 	      SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME    The number of seconds to wait for the spark master node
-	                                                 to fully startup during cluster operations (default: 30)
+	                                                 to fully startup during cluster operations (default: 60)
 	
 	      SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME    The number of seconds to wait for the master node
 	                                                 to fully startup during cluster operations (default: 120)

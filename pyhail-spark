@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.8.0
+__VERSION__=0.8.1
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -213,6 +213,7 @@ function wait_till_spark_master_starts {
     if [ ${cmd_status} -ne 0 ]; then
         local err_msg="Spark Master failed to correctly startup in time. "
         err_msg+="See ${master_logfile}"
+        pkill -INT -u ${USER} java
         die "${err_msg}"
     fi
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.9.2
+__VERSION__=0.9.3
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -325,7 +325,7 @@ function wait_till_spark_workers_start {
 
     note "Waited ${wait_secs} seconds"
 
-    if [ ${cmd_status} -ne 0 ]; then
+    if [ ${wait_secs} -ge ${SPARK_WORKER_SETUP_CONNECTION_WAIT_TIME} ]; then
         local err_msg="All the Spark Workers failed to correctly startup in time. "
         err_msg+="See worker log directory: ${log_dir}/worker-logs"
         set -o xtrace

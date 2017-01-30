@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.10.0
+__VERSION__=0.11.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -55,7 +55,8 @@ export LOCAL_HAIL=${HAIL_HOME}/build/install/hail/bin/hail
 export SPARK_HAIL_JAR=${HAIL_HOME}/build/libs/hail-all-spark.jar
 
 # the PYTHON that should be used
-export PYSPARK_PYTHON=/gscuser/idas/.pyenv/versions/2.7.10/bin/python
+: "${APACHE_SPARK_PYTHON:=/gscuser/idas/.pyenv/versions/2.7.10/bin/python}"  # can be overridden in environment
+export PYSPARK_PYTHON=${APACHE_SPARK_PYTHON}
 
 # set -o xtrace
 # /bin/bash ${LSF_SPARK_WRAPPER} \
@@ -462,6 +463,9 @@ function help_msg {
 	    Environment Variables:
 	     
 	    Use these environment variables to adjust how pyhail-spark operates:
+
+	      APACHE_SPARK_PYTHON                        The location of the python executable that spark uses
+	                                                 (default: /gscuser/idas/.pyenv/versions/2.7.10/bin/python)
 	     
 	      APACHE_SPARK_LOG_DIR                       Directory where Spark places its logs
 	                                                 (default: \$HOME/.spark/logs)

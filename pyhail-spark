@@ -422,7 +422,7 @@ function cluster {
     stop_spark_workers "$(declare -p spark_workers)"
 }
 
-function local_pyspark {
+function local_pyspark_shell {
     export SPARK_LOG_DIR="${SPARK_LOG_DIR}/local/${LSB_JOBID}"
     ensure_spark_log_dir
     local py4j=${SPARK_HOME}/python/lib/py4j-0.10.3-src.zip
@@ -431,6 +431,17 @@ function local_pyspark {
     export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
     export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
     ${PYSPARK_PYTHON}
+}
+
+function local_pyspark_script {
+    export SPARK_LOG_DIR="${SPARK_LOG_DIR}/local/${LSB_JOBID}"
+    ensure_spark_log_dir
+    local py4j=${SPARK_HOME}/python/lib/py4j-0.10.3-src.zip
+    local spark_python_libs=${SPARK_HOME}/python
+    local hail_python_libs=${HAIL_HOME}/python
+    export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
+    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
+    ${PYSPARK_PYTHON} $@
 }
 
 function help_msg {
@@ -443,7 +454,8 @@ function help_msg {
 	    Commands:
 	      help         Show this message and exit
 	      version      Show version number and exit
-	      local        Locally run spark and get a python shell with acceses to pyhail
+	      local        Locally run spark and execute a python script with access to pyhail
+	      local-shell  Locally run spark and get a python shell with access to pyhail
 	      cluster      create a apache spark cluster and run a python script supplied 
 	                   as an argument (must be used via LSF/bsub)
 	     
@@ -485,9 +497,14 @@ function main {
         version)
             echo $__VERSION__
             ;;
-        local)
+        local-shell)
             log "Running pyhail repl in local mode."
-            local_pyspark
+            local_pyspark_shell
+            ;;
+        local)
+            log "Running pyhail script in local mode."
+            log "the python args are:" $@
+            local_pyspark_script $@
             ;;
         cluster)
             log "Running pyhail in a standalone spark cluster."

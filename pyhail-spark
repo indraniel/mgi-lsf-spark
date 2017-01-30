@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.9.3
+__VERSION__=0.10.0
 
 # Example cluster mode invocation
 # bsub -q long \

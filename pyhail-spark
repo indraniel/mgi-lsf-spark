@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.11.0
+__VERSION__=0.12.0
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -57,6 +57,9 @@ export SPARK_HAIL_JAR=${HAIL_HOME}/build/libs/hail-all-spark.jar
 # the PYTHON that should be used
 : "${APACHE_SPARK_PYTHON:=/gscuser/idas/.pyenv/versions/2.7.10/bin/python}"  # can be overridden in environment
 export PYSPARK_PYTHON=${APACHE_SPARK_PYTHON}
+
+# the IPYTHON that should be used
+: "${APACHE_SPARK_IPYTHON:=/gscuser/idas/.pyenv/versions/2.7.10/bin/ipython}"  # can be overridden in environment
 
 # set -o xtrace
 # /bin/bash ${LSF_SPARK_WRAPPER} \
@@ -434,6 +437,17 @@ function local_pyspark_shell {
     ${PYSPARK_PYTHON}
 }
 
+function local_pyspark_ishell {
+    export SPARK_LOG_DIR="${SPARK_LOG_DIR}/local/${LSB_JOBID}"
+    ensure_spark_log_dir
+    local py4j=${SPARK_HOME}/python/lib/py4j-0.10.3-src.zip
+    local spark_python_libs=${SPARK_HOME}/python
+    local hail_python_libs=${HAIL_HOME}/python
+    export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
+    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
+    ${PYSPARK_PYTHON} ${APACHE_SPARK_IPYTHON}
+}
+
 function local_pyspark_script {
     export SPARK_LOG_DIR="${SPARK_LOG_DIR}/local/${LSB_JOBID}"
     ensure_spark_log_dir
@@ -453,12 +467,13 @@ function help_msg {
 	      A collection of pyhail wrappers for using at the MGI
 	    
 	    Commands:
-	      help         Show this message and exit
-	      version      Show version number and exit
-	      local        Locally run spark and execute a python script with access to pyhail
-	      local-shell  Locally run spark and get a python shell with access to pyhail
-	      cluster      create a apache spark cluster and run a python script supplied 
-	                   as an argument (must be used via LSF/bsub)
+	      help          Show this message and exit
+	      version       Show version number and exit
+	      local         Locally run spark and execute a python script with access to pyhail
+	      local-shell   Locally run spark and get a python shell with access to pyhail
+	      local-ishell  Locally run spark and get a ipython shell with access to pyhail
+	      cluster       create a apache spark cluster and run a python script supplied
+	                    as an argument (must be used via LSF/bsub)
 	     
 	    Environment Variables:
 	     
@@ -466,6 +481,9 @@ function help_msg {
 
 	      APACHE_SPARK_PYTHON                        The location of the python executable that spark uses
 	                                                 (default: /gscuser/idas/.pyenv/versions/2.7.10/bin/python)
+
+	      AAPACHE_SPARK_IPYTHON                      The location of the ipython executable being invoked
+	                                                 (default: /gscuser/idas/.pyenv/versions/2.7.10/bin/ipython)
 	     
 	      APACHE_SPARK_LOG_DIR                       Directory where Spark places its logs
 	                                                 (default: \$HOME/.spark/logs)
@@ -504,6 +522,10 @@ function main {
         local-shell)
             log "Running pyhail repl in local mode."
             local_pyspark_shell
+            ;;
+        local-ishell)
+            log "Running pyhail ipython repl in local mode."
+            local_pyspark_ishell
             ;;
         local)
             log "Running pyhail script in local mode."

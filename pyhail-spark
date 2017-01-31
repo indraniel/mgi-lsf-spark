@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.12.0
+__VERSION__=0.12.1
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -467,13 +467,13 @@ function help_msg {
 	      A collection of pyhail wrappers for using at the MGI
 	    
 	    Commands:
-	      help          Show this message and exit
-	      version       Show version number and exit
-	      local         Locally run spark and execute a python script with access to pyhail
-	      local-shell   Locally run spark and get a python shell with access to pyhail
-	      local-ishell  Locally run spark and get a ipython shell with access to pyhail
-	      cluster       create a apache spark cluster and run a python script supplied
-	                    as an argument (must be used via LSF/bsub)
+	      help            Show this message and exit
+	      version         Show version number and exit
+	      local-shell     Locally run spark and get a python shell with access to pyhail
+	      local-ishell    Locally run spark and get a ipython shell with access to pyhail
+	      local [ARGS]    Locally run spark and execute a python script with access to pyhail
+	      cluster [ARGS]  create a apache spark cluster and run a python script supplied
+	                      as an argument (must be used via LSF/bsub)
 	     
 	    Environment Variables:
 	     

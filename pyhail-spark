@@ -1,6 +1,6 @@
 #!/bin/bash
 
-__VERSION__=0.12.1
+__VERSION__=0.12.2
 
 # Example cluster mode invocation
 # bsub -q long \
@@ -464,7 +464,7 @@ function help_msg {
     read -r -d '' msg <<-EOF
 	    Usage: pyhail-spark COMMAND [ARGS]...
 	    
-	      A collection of pyhail wrappers for using at the MGI
+	      A collection of pyhail wrappers for usage at the MGI
 	    
 	    Commands:
 	      help            Show this message and exit
@@ -501,7 +501,7 @@ function help_msg {
 	                                                 to fully startup during cluster operations (default: 120)
 	
 	      SPARK_WORKER_DIR                           The workspace directory to use for the spark worker/executor
-	                                                 nodes to use during cluster operations
+	                                                 nodes during cluster operations
 	                                                 (default: /tmp/\$LSB_JOBID.tmpdir)
 	EOF
     echo "${msg}"

@@ -240,6 +240,8 @@ function create_spark_worker_properties_file {
     read -r -d '' properties_conf <<-EOF
 		spark.local.dir        ${work_dir}
 		spark.network.timeout  300
+		spark.executor.memory  8g
+		spark.memory.fraction  0.25
 		EOF
     local cmd="echo '${properties_conf}' > ${properties_file}"
     exec_ssh_cmd ${host} "${cmd}"

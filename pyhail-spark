@@ -44,6 +44,8 @@ export SPARK_MASTER_WEBUI_PORT=${APACHE_SPARK_MASTER_WEBUI_PORT}
 : "${APACHE_SPARK_LOG_DIR:=$HOME/.spark/logs}"  # can be overridden in environment
 export SPARK_LOG_DIR=${APACHE_SPARK_LOG_DIR}
 
+export SPARK_WORKER_MEMORY="25g"
+
 # Seconds to wait for all the spart workers/executors to fully start up
 # and connect to the master node.  Sometimes NFS can be very, very sluggish
 : "${SPARK_MASTER_SETUP_CONNECTION_WAIT_TIME:=60}"  # can be overridden in environment
@@ -240,8 +242,7 @@ function create_spark_worker_properties_file {
     read -r -d '' properties_conf <<-EOF
 		spark.local.dir        ${work_dir}
 		spark.network.timeout  300
-		spark.executor.memory  8g
-		spark.memory.fraction  0.25
+		spark.executor.memory  25g
 		EOF
     local cmd="echo '${properties_conf}' > ${properties_file}"
     exec_ssh_cmd ${host} "${cmd}"
@@ -371,6 +372,7 @@ function run_pyhail_cmd {
     note "(Hail Command) Start"
     set -o xtrace
     ${SPARK_HOME}/bin/spark-submit \
+        --deploy-mode client \
         --jars ${SPARK_HAIL_JAR} \
         --py-files ${py4j},${pyspark},${pyhail} \
         --master spark://$SPARK_MASTER:$SPARK_MASTER_PORT \
@@ -457,8 +459,8 @@ function local_pyspark_script {
     local spark_python_libs=${SPARK_HOME}/python
     local hail_python_libs=${HAIL_HOME}/python
     export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
-    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
-    ${PYSPARK_PYTHON} $@
+    export SPARK_WORKER_MEMORY="25g"
+    ${SPARK_HOME}/bin/spark-submit --executor-memory 20G --driver-class-path ${SPARK_HAIL_JAR} $@
 }
 
 function help_msg {

@@ -44,7 +44,8 @@ export SPARK_MASTER_WEBUI_PORT=${APACHE_SPARK_MASTER_WEBUI_PORT}
 : "${APACHE_SPARK_LOG_DIR:=$HOME/.spark/logs}"  # can be overridden in environment
 export SPARK_LOG_DIR=${APACHE_SPARK_LOG_DIR}
 
-export SPARK_WORKER_MEMORY="25g"
+: "${APACHE_SPARK_WORKER_MEMORY:=25g}"     # can be overridden in environment
+export SPARK_WORKER_MEMORY=${APACHE_SPARK_WORKER_MEMORY}
 
 # Seconds to wait for all the spart workers/executors to fully start up
 # and connect to the master node.  Sometimes NFS can be very, very sluggish
@@ -437,8 +438,9 @@ function local_pyspark_shell {
     local spark_python_libs=${SPARK_HOME}/python
     local hail_python_libs=${HAIL_HOME}/python
     export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
-    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
-    ${PYSPARK_PYTHON}
+#    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
+    ${SPARK_HOME}/bin/spark-submit --driver-class-path ${SPARK_HAIL_JAR} pyspark-shell-main --name "PySparkShell" $@
+#    ${PYSPARK_PYTHON}
 }
 
 function local_pyspark_ishell {
@@ -448,8 +450,14 @@ function local_pyspark_ishell {
     local spark_python_libs=${SPARK_HOME}/python
     local hail_python_libs=${HAIL_HOME}/python
     export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
-    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
-    ${PYSPARK_PYTHON} ${APACHE_SPARK_IPYTHON}
+#    export SPARK_CLASSPATH=${SPARK_HAIL_JAR}
+    export PYSPARK_DRIVER_PYTHON=${APACHE_SPARK_IPYTHON}
+    export SPARK_MASTER=$(hostname)
+    export SPARK_LOCAL_IP="127.0.0.1"
+
+    ${SPARK_HOME}/bin/pyspark --jars ${SPARK_HAIL_JAR}
+#    ${SPARK_HOME}/bin/spark-submit --driver-class-path ${SPARK_HAIL_JAR} pyspark-shell-main --name "PySparkShell"
+#    ${PYSPARK_PYTHON} ${APACHE_SPARK_IPYTHON}
 }
 
 function local_pyspark_script {
@@ -459,8 +467,7 @@ function local_pyspark_script {
     local spark_python_libs=${SPARK_HOME}/python
     local hail_python_libs=${HAIL_HOME}/python
     export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$HAIL_HOME/python
-    export SPARK_WORKER_MEMORY="25g"
-    ${SPARK_HOME}/bin/spark-submit --executor-memory 20G --driver-class-path ${SPARK_HAIL_JAR} $@
+    ${SPARK_HOME}/bin/spark-submit --driver-class-path ${SPARK_HAIL_JAR} $@
 }
 
 function help_msg {
@@ -507,6 +514,11 @@ function help_msg {
 	      SPARK_WORKER_DIR                           The workspace directory to use for the spark worker/executor
 	                                                 nodes during cluster operations
 	                                                 (default: /tmp/\$LSB_JOBID.tmpdir)
+	     
+	    Useful options:
+	     
+	      --executor-memory 20G                      Let the driver pyhail program take up to 20 GB on the 
+	                                                 worker nodes
 	EOF
     echo "${msg}"
 }
